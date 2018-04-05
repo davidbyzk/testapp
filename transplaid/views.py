@@ -12,10 +12,12 @@ from django.contrib.auth import authenticate
 from django import forms
 from django.views.decorators.csrf import csrf_exempt
 from django import forms
+from django.utils import timezone
 from .forms import UserProfileForm
 import plaid
 from plaid import Client
 from plaid.errors import APIError, ItemError
+from .serializers import TransactionSerializer
 import datetime
 
 
@@ -23,8 +25,6 @@ PLAID_CLIENT_ID = 'x'
 PLAID_SECRET = 'x'
 PLAID_PUBLIC_KEY = 'x'
 PLAID_ENV = 'sandbox'
-
-
 
 client = plaid.Client(client_id = PLAID_CLIENT_ID, secret=PLAID_SECRET,
                   public_key=PLAID_PUBLIC_KEY, environment=PLAID_ENV)
@@ -78,25 +78,26 @@ def item(request):
     institution_response = client.Institutions.get_by_id(item_response['item']['institution_id'])
     return JsonResponse({'item': item_response['item'], 'institution': institution_response['institution']})
 
+
 start_date = "2017-05-05"
 end_date = "2018-03-27"
 @csrf_exempt
 def transactions(request):
     if request.user.is_authenticated:
-        
         global access_token
         print(access_token)
         # Pull transactions for the last 30 days
         start_date = "{:%Y-%m-%d}".format(datetime.datetime.now() + datetime.timedelta(-30))
         end_date = "{:%Y-%m-%d}".format(datetime.datetime.now())
         response = client.Transactions.get(access_token, start_date, end_date)
-        print(response)
+        # gettings transactions from the response
+        serialized = [TransactionSerializer(data=t) for t in response.get("transactions", [])]
+        for transaction in serialized:
+            if transaction.is_valid():
+                transaction.save(owner=request.user, created=timezone.now())
+
         return JsonResponse(response)
-        #response = transactions.self
-        transactions.save()
-        print(response)
-    
-    
+
 """
 @app.route("/create_public_token", methods=['GET'])
 def create_public_token():
