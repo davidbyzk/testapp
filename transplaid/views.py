@@ -2,7 +2,6 @@ from __future__ import unicode_literals
 from django.shortcuts import render
 from django.urls import reverse_lazy
 from django.views import generic
-from users.models import UserProfile
 from django.shortcuts import render
 from django.template import loader
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
@@ -13,18 +12,20 @@ from django import forms
 from django.views.decorators.csrf import csrf_exempt
 from django import forms
 from django.utils import timezone
+from django.conf import settings
 from .forms import UserProfileForm
 import plaid
 from plaid import Client
 from plaid.errors import APIError, ItemError
 from .serializers import TransactionSerializer
+from users.models import UserProfile
 import datetime
+import time
 
-
-PLAID_CLIENT_ID = 'x'
-PLAID_SECRET = 'x'
-PLAID_PUBLIC_KEY = 'x'
-PLAID_ENV = 'sandbox'
+PLAID_CLIENT_ID = settings.PLAID_CLIENT_ID
+PLAID_SECRET = settings.PLAID_SECRET
+PLAID_PUBLIC_KEY = settings.PLAID_PUBLIC_KEY
+PLAID_ENV = settings.PLAID_ENV
 
 client = plaid.Client(client_id = PLAID_CLIENT_ID, secret=PLAID_SECRET,
                   public_key=PLAID_PUBLIC_KEY, environment=PLAID_ENV)
@@ -32,6 +33,7 @@ client = plaid.Client(client_id = PLAID_CLIENT_ID, secret=PLAID_SECRET,
 @csrf_exempt
 @login_required
 def plaidstart(request):
+    print(settings)
     context = {'plaid_public_key': PLAID_PUBLIC_KEY, 'plaid_environment': PLAID_ENV}
     return render(request, 'dashboard/plaid/plaid.html', context)
 
@@ -39,10 +41,37 @@ access_token = None
 public_token = None
 
 
+def get_intervals(day):
+    
+    time.mktime()
+
+@csrf_exempt
+@login_required
+def get_transactions(request, *args, **kwargs):
+    FRIDAY = 4
+    friday_time = (16, 00)
+    usual_time = (18, 00)
+    launch_time = datetime.datetime.now()
+    if datetime.weekday() == FRIDAY:
+        start_date = .mk    
+    if request.user.is_authenticated:
+        users = UserProfile.objects.get()
+        for u in users:
+            response = client.Transactions.get(u.access_token, start_date, end_date)
+            # Pull transactions for the last 30 days
+            start_date = "{:%Y-%m-%d}".format(datetime.datetime.now() + datetime.timedelta(-1))
+            end_date = "{:%Y-%m-%d}".format(datetime.datetime.now())
+            response = client.Transactions.get(access_token, start_date, end_date)
+            # gettings transactions from the response
+            serialized = [TransactionSerializer(data=t) for t in response.get("transactions", [])]
+            for transaction in serialized:
+                if transaction.is_valid():
+                    transaction.save(owner=request.user, created=timezone.now())            
+
+
 @csrf_exempt
 @login_required
 def get_access_token(request, *args, **kwargs):
-    
     if request.method == 'POST':
         if request.user.is_authenticated:                 
             global access_token
@@ -59,7 +88,7 @@ def get_access_token(request, *args, **kwargs):
            
 
             return JsonResponse(exchange_response)
-            
+
 
 @csrf_exempt
 def accounts(request):
@@ -78,11 +107,14 @@ def item(request):
     institution_response = client.Institutions.get_by_id(item_response['item']['institution_id'])
     return JsonResponse({'item': item_response['item'], 'institution': institution_response['institution']})
 
-
-start_date = "2017-05-05"
-end_date = "2018-03-27"
 @csrf_exempt
 def transactions(request):
+    FRIDAY = 4
+    friday_time = (16, 00)
+    usual_time = (18, 00)    
+    launch_time = datetime.datetime.now()
+    if datetime.weekday() == FRIDAY:
+        start_date = datetime.datetime.
     if request.user.is_authenticated:
         global access_token
         print(access_token)

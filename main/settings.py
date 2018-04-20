@@ -151,3 +151,13 @@ SITE_ID = 1
 
 ACCOUNT_EMAIL_REQUIRED = True
 ACCOUNT_USERNAME_REQUIRED = False
+
+PLAID_CLIENT_ID = '5ac5ca0b8d923954e3a45296'
+PLAID_SECRET = 'd82c008ffe1d289c508a42c743dc47'
+PLAID_PUBLIC_KEY = '33726685c9692826ce521e7d944f59'
+PLAID_ENV = 'sandbox'
+
+try:
+    from settings_local import *
+except ImportError:
+    pass
