@@ -44,25 +44,8 @@ public_token = None
 @csrf_exempt
 @login_required
 def daily_transactions(request, *args, **kwargs):
-    all_transactions = {}
-    users_without_valid_access_tokens = []
     if request.user.is_authenticated:
-        users = UserProfile.objects.exclude(access_token__isnull=True).exclude(access_token__exact='')
-        for u in users:
-            # Pull transactions for the last 30 days
-            start_date = "{:%Y-%m-%d}".format(datetime.datetime.now() + datetime.timedelta(-1))
-            end_date = "{:%Y-%m-%d}".format(datetime.datetime.now())            
-            try:
-                response = client.Transactions.get(u.access_token, start_date, end_date)
-            except plaid.errors.InvalidInputError: 
-                users_without_valid_access_tokens.append(u.user.username)
-                continue
-            # gettings transactions from the response
-            serialized = [TransactionSerializer(data=t) for t in response.get("transactions", [])]
-            for transaction in serialized:
-                if transaction.is_valid():
-                    transaction.save(owner=request.user, created=timezone.now())
-            all_transactions[u.access_token] = response.get("transactions")
+        users_without_valid_access_tokens, all_transactions = get_users_transactions()
         return JsonResponse({
             "users_without_valid_access_tokens": users_without_valid_access_tokens,
             "transactions": all_transactions
@@ -127,6 +110,26 @@ def transactions(request):
                 transaction.save(owner=request.user, created=timezone.now())
 
         return JsonResponse(response)
+
+def get_users_transactions(client):
+    users = UserProfile.objects.exclude(access_token__isnull=True).exclude(access_token__exact='')
+    users_without_valid_access_tokens = []
+    all_transactions = {}
+    for u in users:
+        start_date = "{:%Y-%m-%d}".format(datetime.datetime.now() + datetime.timedelta(-1))
+        end_date = "{:%Y-%m-%d}".format(datetime.datetime.now())            
+        try:
+            response = client.Transactions.get(u.access_token, start_date, end_date)
+        except plaid.errors.InvalidInputError: 
+            users_without_valid_access_tokens.append(u.user.username)
+            continue
+        # gettings transactions from the response
+        serialized = [TransactionSerializer(data=t) for t in response.get("transactions", [])]
+        for transaction in serialized:
+            if transaction.is_valid():
+                transaction.save(owner=u.user, created=timezone.now())
+        all_transactions[u.access_token] = response.get("transactions")
+    return users_without_valid_access_tokens, all_transactions
 
 """
 @app.route("/create_public_token", methods=['GET'])
