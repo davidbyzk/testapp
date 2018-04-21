@@ -41,32 +41,32 @@ access_token = None
 public_token = None
 
 
-def get_intervals(day):
-    
-    time.mktime()
-
 @csrf_exempt
 @login_required
-def get_transactions(request, *args, **kwargs):
-    FRIDAY = 4
-    friday_time = (16, 00)
-    usual_time = (18, 00)
-    launch_time = datetime.datetime.now()
-    if datetime.weekday() == FRIDAY:
-        start_date = .mk    
+def daily_transactions(request, *args, **kwargs):
+    all_transactions = {}
+    users_without_valid_access_tokens = []
     if request.user.is_authenticated:
-        users = UserProfile.objects.get()
+        users = UserProfile.objects.exclude(access_token__isnull=True).exclude(access_token__exact='')
         for u in users:
-            response = client.Transactions.get(u.access_token, start_date, end_date)
             # Pull transactions for the last 30 days
             start_date = "{:%Y-%m-%d}".format(datetime.datetime.now() + datetime.timedelta(-1))
-            end_date = "{:%Y-%m-%d}".format(datetime.datetime.now())
-            response = client.Transactions.get(access_token, start_date, end_date)
+            end_date = "{:%Y-%m-%d}".format(datetime.datetime.now())            
+            try:
+                response = client.Transactions.get(u.access_token, start_date, end_date)
+            except plaid.errors.InvalidInputError: 
+                users_without_valid_access_tokens.append(u.user.username)
+                continue
             # gettings transactions from the response
             serialized = [TransactionSerializer(data=t) for t in response.get("transactions", [])]
             for transaction in serialized:
                 if transaction.is_valid():
-                    transaction.save(owner=request.user, created=timezone.now())            
+                    transaction.save(owner=request.user, created=timezone.now())
+            all_transactions[u.access_token] = response.get("transactions")
+        return JsonResponse({
+            "users_without_valid_access_tokens": users_without_valid_access_tokens,
+            "transactions": all_transactions
+        })
 
 
 @csrf_exempt
@@ -85,7 +85,11 @@ def get_access_token(request, *args, **kwargs):
             item_id = exchange_response['item_id']
             print(item_id)
             print(exchange_response)  
-           
+            print(request.user.id)
+            profile, created = UserProfile.objects.get_or_create(user=request.user)
+            profile.access_token = access_token
+            profile.item_id = item_id
+            profile.save()
 
             return JsonResponse(exchange_response)
 
@@ -109,12 +113,6 @@ def item(request):
 
 @csrf_exempt
 def transactions(request):
-    FRIDAY = 4
-    friday_time = (16, 00)
-    usual_time = (18, 00)    
-    launch_time = datetime.datetime.now()
-    if datetime.weekday() == FRIDAY:
-        start_date = datetime.datetime.
     if request.user.is_authenticated:
         global access_token
         print(access_token)

@@ -67,3 +67,9 @@ class Transaction(models.Model):
 
     class Meta:
         ordering = ('transaction_id',)    
+
+
+class DailyTransaction(Transaction):
+    
+    class Meta:
+        db_table = "daily_transaction"
