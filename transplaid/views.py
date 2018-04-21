@@ -2,7 +2,6 @@ from __future__ import unicode_literals
 from django.shortcuts import render
 from django.urls import reverse_lazy
 from django.views import generic
-from users.models import UserProfile
 from django.shortcuts import render
 from django.template import loader
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
@@ -13,18 +12,20 @@ from django import forms
 from django.views.decorators.csrf import csrf_exempt
 from django import forms
 from django.utils import timezone
+from django.conf import settings
 from .forms import UserProfileForm
 import plaid
 from plaid import Client
 from plaid.errors import APIError, ItemError
 from .serializers import TransactionSerializer
+from users.models import UserProfile
 import datetime
+import time
 
-
-PLAID_CLIENT_ID = 'x'
-PLAID_SECRET = 'x'
-PLAID_PUBLIC_KEY = 'x'
-PLAID_ENV = 'sandbox'
+PLAID_CLIENT_ID = settings.PLAID_CLIENT_ID
+PLAID_SECRET = settings.PLAID_SECRET
+PLAID_PUBLIC_KEY = settings.PLAID_PUBLIC_KEY
+PLAID_ENV = settings.PLAID_ENV
 
 client = plaid.Client(client_id = PLAID_CLIENT_ID, secret=PLAID_SECRET,
                   public_key=PLAID_PUBLIC_KEY, environment=PLAID_ENV)
@@ -32,6 +33,7 @@ client = plaid.Client(client_id = PLAID_CLIENT_ID, secret=PLAID_SECRET,
 @csrf_exempt
 @login_required
 def plaidstart(request):
+    print(settings)
     context = {'plaid_public_key': PLAID_PUBLIC_KEY, 'plaid_environment': PLAID_ENV}
     return render(request, 'dashboard/plaid/plaid.html', context)
 
@@ -41,8 +43,35 @@ public_token = None
 
 @csrf_exempt
 @login_required
+def daily_transactions(request, *args, **kwargs):
+    all_transactions = {}
+    users_without_valid_access_tokens = []
+    if request.user.is_authenticated:
+        users = UserProfile.objects.exclude(access_token__isnull=True).exclude(access_token__exact='')
+        for u in users:
+            # Pull transactions for the last 30 days
+            start_date = "{:%Y-%m-%d}".format(datetime.datetime.now() + datetime.timedelta(-1))
+            end_date = "{:%Y-%m-%d}".format(datetime.datetime.now())            
+            try:
+                response = client.Transactions.get(u.access_token, start_date, end_date)
+            except plaid.errors.InvalidInputError: 
+                users_without_valid_access_tokens.append(u.user.username)
+                continue
+            # gettings transactions from the response
+            serialized = [TransactionSerializer(data=t) for t in response.get("transactions", [])]
+            for transaction in serialized:
+                if transaction.is_valid():
+                    transaction.save(owner=request.user, created=timezone.now())
+            all_transactions[u.access_token] = response.get("transactions")
+        return JsonResponse({
+            "users_without_valid_access_tokens": users_without_valid_access_tokens,
+            "transactions": all_transactions
+        })
+
+
+@csrf_exempt
+@login_required
 def get_access_token(request, *args, **kwargs):
-    
     if request.method == 'POST':
         if request.user.is_authenticated:                 
             global access_token
@@ -56,10 +85,14 @@ def get_access_token(request, *args, **kwargs):
             item_id = exchange_response['item_id']
             print(item_id)
             print(exchange_response)  
-           
+            print(request.user.id)
+            profile, created = UserProfile.objects.get_or_create(user=request.user)
+            profile.access_token = access_token
+            profile.item_id = item_id
+            profile.save()
 
             return JsonResponse(exchange_response)
-            
+
 
 @csrf_exempt
 def accounts(request):
@@ -78,9 +111,6 @@ def item(request):
     institution_response = client.Institutions.get_by_id(item_response['item']['institution_id'])
     return JsonResponse({'item': item_response['item'], 'institution': institution_response['institution']})
 
-
-start_date = "2017-05-05"
-end_date = "2018-03-27"
 @csrf_exempt
 def transactions(request):
     if request.user.is_authenticated:
