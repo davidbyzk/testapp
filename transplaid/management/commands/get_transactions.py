@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.conf import settings
 import plaid
 
-from transplaid import views
+from transplaid import transactions
 
 class Command(BaseCommand):
     help = 'Retrieves transactions for users with active access tokens'
@@ -13,7 +13,7 @@ class Command(BaseCommand):
         public_key=settings.PLAID_PUBLIC_KEY, environment=settings.PLAID_ENV)
 
     def handle(self, *args, **options):
-        users_without_access_token, all_transactions = views.get_users_transactions(self.client)
+        users_without_access_token, all_transactions = transactions.get_users_transactions(self.client)
         if users_without_access_token:
             self.stdout.write(self.style.ERROR("Users with not valid access tokens found:"))
             for u in users_without_access_token:

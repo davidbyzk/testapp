@@ -1,7 +1,7 @@
 import copy
 
 from rest_framework import serializers
-from transplaid.models import Transaction
+from transplaid.models import Transaction, InitialPullTransaction
 
 
 class LocationSerializer(serializers.Serializer):
@@ -24,7 +24,7 @@ class PaymentDataSerializer(serializers.Serializer):
    payment_processor = serializers.CharField(allow_null=True, default="")
 
 
-class TransactionSerializer(serializers.Serializer):
+class AbstractTransactionSerializer(serializers.Serializer):
     transaction_id = serializers.CharField()
     category_id = serializers.CharField(allow_null=True, default="")
     category = serializers.ListField(allow_null=True, default="")
@@ -40,10 +40,31 @@ class TransactionSerializer(serializers.Serializer):
     location = LocationSerializer()
     payment_meta = PaymentDataSerializer()
 
+    class Meta:
+        abstract = True
+
+
+class TransactionSerializer(AbstractTransactionSerializer):
     def create(self, validated_data):
         data = copy.copy(validated_data)
-        result_data = data.pop('location')
-        result_data.update(data.pop('payment_meta'))
+        result_data = {}
+        try:
+            result_data = data.pop('location')
+            result_data.update(data.pop('payment_meta'))
+        except KeyError:
+            pass
         result_data.update(data)
         return Transaction.objects.create(**result_data)
 
+
+class InitialPullTransactionSerializer(AbstractTransactionSerializer):
+    def create(self, validated_data):
+        data = copy.copy(validated_data)
+        result_data = {}        
+        try:
+            result_data = data.pop('location')
+            result_data.update(data.pop('payment_meta'))
+        except KeyError:
+            pass
+        result_data.update(data)
+        return InitialPullTransaction.objects.create(**result_data)
