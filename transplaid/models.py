@@ -31,9 +31,8 @@ class Exchange(models.Model):
         ordering = ('item_id',)
 
 
-class Transaction(models.Model):
+class AbstractTransaction(models.Model):
     created = models.DateTimeField(auto_created=True)
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='transaction', on_delete=models.CASCADE)
     account_id = models.CharField(max_length=100, blank=True, default='')
     amount = models.CharField(max_length=100, blank=True, default='')
     category = models.CharField(max_length=100, blank=True, default='', null=True)
@@ -67,9 +66,20 @@ class Transaction(models.Model):
 
     class Meta:
         ordering = ('transaction_id',)    
+        abstract = True
+
+
+class Transaction(AbstractTransaction):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='transaction', on_delete=models.CASCADE)    
 
 
 class DailyTransaction(Transaction):
     
     class Meta:
         db_table = "daily_transaction"
+
+
+class InitialPullTransaction(AbstractTransaction):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='initial_pull', on_delete=models.CASCADE)
+    class Meta:
+        db_table = "initial_pull"

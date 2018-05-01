@@ -60,6 +60,7 @@ class UserProfile(models.Model):
     public_token = models.CharField(max_length=100, blank=True, null=True, verbose_name='public_token')
     access_token = models.CharField(max_length=100, blank=True, null=True, verbose_name='access_token')
     item_id = models.CharField(max_length=100, blank=True, null=True, verbose_name='item_ID')
+    just_signed_up = models.BooleanField(default=True)
 
     def __str__(self):
         return force_text(self.user)
